@@ -12,6 +12,11 @@ setup_alloc!();
 const CODE :&[u8]= include_bytes!("../../res/fungible_token.wasm");
 const INITIAL_BALANCE: Balance = 0;
 const SOMEGAS : Gas=1000000000000;
+
+trait DeployPool {
+    fn new_pool(&mut self, poolminter:AccountId, roomsize :U128) -> Promise;
+}
+
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Pool {
@@ -40,9 +45,32 @@ impl Pool{
         return true;
     }
 
-    pub fn new_pool(&mut self,poolminter:AccountId, roomsize : U128)->Promise{
-        let subaccount_id = format!("{}.{}", poolminter, env::current_account_id()).to_string();
+    // pub fn new_pool(&mut self,poolminter:AccountId, roomsize : U128)->Promise{
+    //     assert!(env::predecessor_account_id(), self.subowner);
+    //     let subaccount_id = format!("{}.{}", poolminter, env::current_account_id()).to_string();
+    //     let subaccout_copy= subaccount_id.clone();
+    //     let promise= Promise::new(subaccount_id)
+    //         .create_account()
+    //         .add_full_access_key(env::signer_account_pk())
+    //         .transfer(INITIAL_BALANCE)
+    //         .deploy_contract(CODE.to_vec()).function_call(
+    //         "new_default_meta".to_string().into_bytes(),
+    //         json!({"owner_id":poolminter,"total_supply":roomsize.0}).to_string().into_bytes(),
+    //         INITIAL_BALANCE,env::prepaid_gas()
+    //     );
+    //
+    //     self.token.insert(&poolminter, &subaccout_copy);
+    //
+    //     return promise
+    // }
+}
 
+#[near_bindgen]
+impl DeployPool for Pool{
+    fn new_pool(&mut self, poolminter: AccountId, roomsize: U128) -> Promise {
+        assert_eq!(env::predecessor_account_id(), self.subowner.to_string());
+        let subaccount_id = format!("{}.{}", poolminter, env::current_account_id()).to_string();
+        let subaccout_copy= subaccount_id.clone();
         let promise= Promise::new(subaccount_id)
             .create_account()
             .add_full_access_key(env::signer_account_pk())
@@ -52,6 +80,9 @@ impl Pool{
             json!({"owner_id":poolminter,"total_supply":roomsize.0}).to_string().into_bytes(),
             INITIAL_BALANCE,env::prepaid_gas()
         );
+
+        self.token.insert(&poolminter, &subaccout_copy);
+
         return promise
     }
 }

@@ -23,12 +23,15 @@ use near_contract_standards::non_fungible_token::NonFungibleToken;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LazyOption;
 use near_sdk::json_types::{Base64VecU8, ValidAccountId};
-use near_sdk::{
-    env, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, Promise, PromiseOrValue,
-};
+use near_sdk::{env, ext_contract,near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, Promise, PromiseOrValue, log};
 use near_sdk::env::{sha256, state_read};
 
 near_sdk::setup_alloc!();
+
+#[ext_contract(ext_pool)]
+pub trait DeployPool {
+    fn new_pool(&self, poolminter:AccountId, roomsize :U128) -> Promise;
+}
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
@@ -110,6 +113,11 @@ impl Contract {
         };
         env::log("token minted".to_string().as_bytes());
         self.tokens.mint(token_id, receiver_id, Some(token_metadata))
+    }
+
+    pub fn start_room(&mut self, roomsize : U128)->Promise{
+        assert_eq!(self.tokens.owner_id, env::predecessor_account_id());
+        return ext_pool::new_pool(env::predecessor_account_id(),roomsize.0);
     }
 }
 
