@@ -82,6 +82,13 @@ impl Contract {
     fn on_tokens_burned(&mut self, account_id: AccountId, amount: Balance) {
         log!("Account @{} burned {}", account_id, amount);
     }
+
+    fn stake_inpool(&mut self, amount: U128){
+        let contract_id = env::current_account_id();
+        let memo : String = format!("staked in pool {} by {}",contract_id.clone(),env::predecessor_account_id());
+        let reciever_id=ValidAccountId::try_from(env::current_account_id()).unwrap();
+        self.token.ft_transfer(reciever_id,amount,Some(memo))
+    }
 }
 
 near_contract_standards::impl_fungible_token_core!(Contract, token, on_tokens_burned);

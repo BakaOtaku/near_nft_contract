@@ -23,21 +23,25 @@ use near_contract_standards::non_fungible_token::NonFungibleToken;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LazyOption;
 use near_sdk::json_types::{Base64VecU8, ValidAccountId};
-use near_sdk::{env, ext_contract,near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, Promise, PromiseOrValue, log};
+use near_sdk::{env, ext_contract,near_bindgen, AccountId,Balance,Gas, BorshStorageKey, PanicOnDefault, Promise, PromiseOrValue, log};
 use near_sdk::env::{sha256, state_read};
 
 near_sdk::setup_alloc!();
 
 #[ext_contract(ext_pool)]
 pub trait DeployPool {
-    fn new_pool(&self, poolminter:AccountId, roomsize :U128) -> Promise;
+    fn new_pool(&mut self, poolminter:AccountId, roomsize :U128) -> Promise;
 }
+
+const INITIAL_BALANCE: Balance = 0;
+const SOMEGAS : Gas=1000000000000;
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Contract {
     tokens: NonFungibleToken,
     metadata: LazyOption<NFTContractMetadata>,
+    tokenIds : LazyOption<String>,
 }
 
 const DATA_IMAGE_SVG_NEAR_ICON: &str = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 288 288'%3E%3Cg id='l' data-name='l'%3E%3Cpath d='M187.58,79.81l-30.1,44.69a3.2,3.2,0,0,0,4.75,4.2L191.86,103a1.2,1.2,0,0,1,2,.91v80.46a1.2,1.2,0,0,1-2.12.77L102.18,77.93A15.35,15.35,0,0,0,90.47,72.5H87.34A15.34,15.34,0,0,0,72,87.84V201.16A15.34,15.34,0,0,0,87.34,216.5h0a15.35,15.35,0,0,0,13.08-7.31l30.1-44.69a3.2,3.2,0,0,0-4.75-4.2L96.14,186a1.2,1.2,0,0,1-2-.91V104.61a1.2,1.2,0,0,1,2.12-.77l89.55,107.23a15.35,15.35,0,0,0,11.71,5.43h3.13A15.34,15.34,0,0,0,216,201.16V87.84A15.34,15.34,0,0,0,200.66,72.5h0A15.35,15.35,0,0,0,187.58,79.81Z'/%3E%3C/g%3E%3C/svg%3E";
@@ -49,6 +53,7 @@ enum StorageKey {
     TokenMetadata,
     Enumeration,
     Approval,
+    TokenIds,
 }
 
 #[near_bindgen]
@@ -69,6 +74,7 @@ impl Contract {
             reference:None,
             reference_hash:None
         };
+        let initcounter : String = "0".to_string();
         Self {
             tokens: NonFungibleToken::new(
                 StorageKey::NonFungibleToken,
@@ -78,6 +84,7 @@ impl Contract {
                 Some(StorageKey::Approval),
             ),
             metadata: LazyOption::new(StorageKey::Metadata, Some(&metadata)),
+            tokenIds: LazyOption::new(StorageKey::TokenIds, Some(&initcounter))
         }
     }
 
@@ -92,13 +99,15 @@ impl Contract {
     #[payable]
     pub fn nft_mint(
         &mut self,
-        token_id: TokenId,
         receiver_id: ValidAccountId,
         ipfs_hash: String
     ) -> Token {
-        let media_hash= env::sha256(ipfs_hash.as_bytes());
-        let token_metadata= TokenMetadata{
-            title:Some("inviteNft".to_string()),
+        let media_hash= env::sha256(ipfs_hash.clone().as_bytes());
+        let latest_counter:String = self.tokenIds.get().unwrap();
+        let intlatesCounter : i32 = latest_counter.parse().unwrap();
+
+        let owner_metadata= TokenMetadata{
+            title:Some("ownernft".to_string()),
             description:None,
             copies:Some(1),
             issued_at:None,
@@ -108,16 +117,37 @@ impl Contract {
             extra:None,
             reference:None,
             reference_hash:None,
-            media: Some(ipfs_hash),
-            media_hash: Some(Base64VecU8::from(media_hash))
+            media: Some(ipfs_hash.clone()),
+            media_hash: Some(Base64VecU8::from(media_hash.clone()))
         };
+        for i in 1..3 {
+            let token_metadata = TokenMetadata {
+                title: Some("inviteNft".to_string()),
+                description: None,
+                copies: Some(1),
+                issued_at: None,
+                expires_at: None,
+                starts_at: Some(env::block_timestamp().to_string()),
+                updated_at: Some(env::block_timestamp().to_string()),
+                extra: None,
+                reference: None,
+                reference_hash: None,
+                media: Some(ipfs_hash.clone()),
+                media_hash: Some(Base64VecU8::from(media_hash.clone()))
+
+            };
+
+            env::log("token minted".to_string().as_bytes());
+           let _= self.tokens.mint((intlatesCounter+1+i).to_string(), receiver_id.clone(), Some(token_metadata));
+        }
+
         env::log("token minted".to_string().as_bytes());
-        self.tokens.mint(token_id, receiver_id, Some(token_metadata))
+        self.tokens.mint((intlatesCounter+1).to_string(), receiver_id, Some(owner_metadata))
     }
 
-    pub fn start_room(&mut self, roomsize : U128)->Promise{
+    pub fn start_room(&mut self, pool_id : AccountId, roomsize : U128)->Promise{
         assert_eq!(self.tokens.owner_id, env::predecessor_account_id());
-        return ext_pool::new_pool(env::predecessor_account_id(),roomsize.0);
+        return ext_pool::new_pool(env::predecessor_account_id(),roomsize, &pool_id,INITIAL_BALANCE, SOMEGAS);
     }
 }
 
