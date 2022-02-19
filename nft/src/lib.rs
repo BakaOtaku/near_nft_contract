@@ -16,6 +16,7 @@ NOTES:
     keys on its account.
 */
 use std::borrow::{Borrow, BorrowMut};
+use std::convert::{TryFrom, TryInto};
 use near_contract_standards::non_fungible_token::metadata::{
     NFTContractMetadata, NonFungibleTokenMetadataProvider, TokenMetadata, NFT_METADATA_SPEC,
 };
@@ -25,17 +26,23 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LazyOption;
 use near_sdk::json_types::{Base64VecU8, ValidAccountId};
 use near_sdk::{env, ext_contract,near_bindgen, AccountId,Balance,Gas, BorshStorageKey, PanicOnDefault, Promise, PromiseOrValue, log};
-use near_sdk::env::{sha256, state_read};
+use near_sdk::env::{log, sha256, state_read};
+// use near_sdk::PromiseOrValue::Promise;
+use near_sdk::serde_json::{json, json_internal_vec};
 
 near_sdk::setup_alloc!();
 
 #[ext_contract(ext_pool)]
 pub trait DeployPool {
-    fn new_pool(&mut self, poolminter:AccountId, roomsize :U128) -> Promise;
+    fn new_pool(&mut self, poolname:AccountId, owner_id:AccountId,roomsize :U128) -> PromiseOrValue<AccountId>;
 }
 
-const INITIAL_BALANCE: Balance = 0;
-const SOMEGAS : Gas=1000000000000;
+
+const NO_DEPOSIT: Balance = 0;
+const BASE_GAS: Gas = 5_000_000_000_000;
+const PROMISE_CALL: Gas = 5_000_000_000_000;
+const GAS_FOR_NFT_ON_APPROVE: Gas = BASE_GAS + PROMISE_CALL;
+
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
@@ -67,7 +74,7 @@ impl Contract {
 
     #[init]
     pub fn new(owner_id: ValidAccountId,name :String,symbol:String,base_uri:String) -> Self {
-        assert!(!env::state_exists(), "Already initialized");
+        // assert!(!env::state_exists(), "Already initialized");
         let metadata:NFTContractMetadata=NFTContractMetadata{
             spec: NFT_METADATA_SPEC.to_string(),
             name,
@@ -162,9 +169,15 @@ impl Contract {
 
     }
 
-    pub fn create_room(&mut self, pool_id : AccountId, roomsize : U128)->Promise{
-        assert_eq!(self.tokens.owner_id, env::predecessor_account_id());
-        return ext_pool::new_pool(env::predecessor_account_id(),roomsize, &pool_id,INITIAL_BALANCE, SOMEGAS);
+    pub fn create_room(&mut self, pool_id : AccountId, roomsize : U128)->PromiseOrValue<String>{
+        // assert_eq!(self.tokens.owner_id, env::predecessor_account_id());
+        let prepaid_gas = env::prepaid_gas();
+        let account_id = env::predecessor_account_id();
+        let mut poolname:Vec<&str> = account_id.split(".").collect();
+        let counter=self.tokenIds.get().unwrap().to_owned();
+        let mut finalname = poolname[0].to_string();
+        finalname.push_str("123");
+        ext_pool::new_pool(finalname.to_string(),env::predecessor_account_id(),roomsize, &pool_id,NO_DEPOSIT, prepaid_gas - GAS_FOR_NFT_ON_APPROVE).into()
     }
 }
 
