@@ -89,6 +89,7 @@ impl Contract {
         let reciever_id=ValidAccountId::try_from(env::current_account_id()).unwrap();
         self.token.ft_transfer(reciever_id,amount,Some(memo))
     }
+
 }
 
 near_contract_standards::impl_fungible_token_core!(Contract, token, on_tokens_burned);
