@@ -119,7 +119,7 @@ impl Contract {
 
         let media_hash= env::sha256(ipfs_hash.clone().as_bytes());
         let latest_counter:String = self.tokenIds.get().unwrap();
-        let intlatesCounter : i32 = latest_counter.parse().unwrap();
+        let int_counter : i32 = latest_counter.parse().unwrap();
 
         let owner_metadata= TokenMetadata{
             title:Some("ownernft".to_string()),
@@ -153,12 +153,12 @@ impl Contract {
             };
 
             env::log("token minted".to_string().as_bytes());
-           let _= self.tokens.mint((intlatesCounter+1+i).to_string(), receiver_id.clone(), Some(token_metadata));
+           let _= self.tokens.mint((int_counter+1+i).to_string(), receiver_id.clone(), Some(token_metadata));
         }
 
         env::log("token minted".to_string().as_bytes());
-        self.tokenIds.replace(&(intlatesCounter+3).to_string());
-        self.tokens.mint((intlatesCounter+1).to_string(), receiver_id, Some(owner_metadata))
+        self.tokenIds.replace(&(int_counter+3).to_string());
+        self.tokens.mint((int_counter+1).to_string(), receiver_id, Some(owner_metadata))
 
     }
 
