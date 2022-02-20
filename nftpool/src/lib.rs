@@ -83,6 +83,7 @@ impl DeployPool for Pool{
         //     format!("{}.{}", prefix, env::current_account_id())
         // );
         // let somename = ValidAccountId::try_from(poolminter.clone()).unwrap();
+        log!("{}",env::prepaid_gas().to_string());
         let subaccount_id = format!("{}.{}", poolname, env::current_account_id()).to_string();
         let stuff =Promise::new(subaccount_id.clone())
             .create_account()
@@ -91,16 +92,18 @@ impl DeployPool for Pool{
             .deploy_contract(CODE.to_vec());
 
         env::log("this was here".to_string().as_bytes());
+        log!("creating nft pool for erc20");
         // let callback = Promise::new(
         //     env::current_account_id(), // the recipient of this ActionReceipt (&self)
         // )
 
         let otherpromise=Promise::new(subaccount_id.clone()).function_call(
             b"new_default_meta".to_vec(),
-            json!({"owner_id":owner_id.clone(),"total_supply":roomsize}).to_string().into_bytes(),
+            json!({"owner_id":owner_id.clone(),"total_supply":roomsize,"nftcaller":"nftcontract.somenewname.testnet"}).to_string().into_bytes(),
 0,
             5_000_000_000_000
         );
+
 
         stuff.then(otherpromise);
 
