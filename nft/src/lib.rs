@@ -23,9 +23,9 @@ use near_contract_standards::non_fungible_token::metadata::{
 use near_contract_standards::non_fungible_token::{Token, TokenId};
 use near_contract_standards::non_fungible_token::NonFungibleToken;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LazyOption, LookupMap};
+use near_sdk::collections::{LazyOption, LookupMap, UnorderedSet};
 use near_sdk::json_types::{Base64VecU8, ValidAccountId};
-use near_sdk::{env, ext_contract, near_bindgen, AccountId, Balance, Gas, BorshStorageKey, PanicOnDefault, Promise, PromiseOrValue, log, PromiseResult};
+use near_sdk::{env, ext_contract, near_bindgen, AccountId, Balance, Gas, BorshStorageKey, PanicOnDefault, Promise, PromiseOrValue, log, PromiseResult, CryptoHash};
 use near_sdk::env::{log, promise_result, sha256, state_read};
 // use near_sdk::PromiseOrValue::Promise;
 // use near_sdk::PromiseOrValue::Promise;
@@ -50,8 +50,8 @@ pub trait FungibleToken {
 // }
 #[ext_contract(ext_self)]
 pub trait MyContract {
-    fn nft_mint_callback(&mut self,reciever_id :ValidAccountId,ipfs_hash: String) -> Token;
-    fn invite_other_callback(&mut self, caller : AccountId,invitee : ValidAccountId) -> PromiseOrValue<String>;
+    fn nft_mint_callback(&mut self, check:String, caller : AccountId,reciever_id :ValidAccountId,ipfs_hash: String) -> Token;
+    fn invite_other_callback(&mut self, caller : AccountId,invitee : ValidAccountId) -> Token;
 }
 
 const NO_DEPOSIT: Balance = 0;
@@ -83,7 +83,9 @@ enum StorageKey {
     TokenIds,
     ContractOwner,
     OwnerNft,
-    InviteCount
+    InviteCount,
+    TokensPerOwner { account_hash: Vec<u8> },
+    TokenPerOwnerInner { account_id_hash: CryptoHash },
 }
 
 #[near_bindgen]
@@ -142,6 +144,8 @@ impl Contract {
             0, // yocto NEAR to attach
             5_000_000_000_000 // gas to attach
         ).then(ext_self::nft_mint_callback(
+            "checkbalance".to_string(),
+            env::predecessor_account_id().into(),
             validAccountID.into(),
             ipfs_hash,
             &env::current_account_id(), // this contract's account id
@@ -180,51 +184,113 @@ impl Contract {
     }
 
     #[payable]
-    pub fn nft_mint_callback(&mut self, reciever_id: ValidAccountId, ipfs_hash: String) -> Token {
+    pub fn nft_mint_callback(&mut self, check:String, caller : AccountId,reciever_id: ValidAccountId, ipfs_hash: String) -> Token {
         assert_eq!(
             env::promise_results_count(),
             1,
             "This is a callback method"
         );
+        let mut owner_metadata : TokenMetadata = TokenMetadata {
+            title: None,
+            description: None,
+            media: None,
+            media_hash: None,
+            copies: None,
+            issued_at: None,
+            expires_at: None,
+            starts_at: None,
+            updated_at: None,
+            extra: None,
+            reference: None,
+            reference_hash: None
+        };
+        let latest_counter: String = self.tokenIds.get().unwrap();
+        let int_counter: i32 = latest_counter.parse().unwrap();
+        //
+        // // handle the result from the cross contract call this method is a callback for
+        if check.eq("checkbalance") {
+            log!(ipfs_hash);
+            let stuff = reciever_id.to_string();
+            log!(stuff);
 
-        // handle the result from the cross contract call this method is a callback for
-        log!(ipfs_hash);
-        let stuff = reciever_id.to_string();
-        log!(stuff);
-        match env::promise_result(0) {
-            PromiseResult::NotReady => unreachable!(),
-            PromiseResult::Failed => unreachable!(),
-            PromiseResult::Successful(result) => {
-                let balance = near_sdk::serde_json::from_slice::<U128>(&result).unwrap();
-                log!("this is balance very much");
-                if (balance.0 < 0) {
-                    assert!(false, "balance less then required")
-                }
-                // } else {
-                //     "Hmmmm".to_string()
-                // }
-            },
+            match env::promise_result(0) {
+                PromiseResult::NotReady => unreachable!(),
+                PromiseResult::Failed => unreachable!(),
+                PromiseResult::Successful(result) => {
+                    let balance = near_sdk::serde_json::from_slice::<U128>(&result).unwrap();
+                    log!("this is balance very much");
+                    if (balance.0 < 0) {
+                        assert!(false, "balance less then required")
+                    }
+                    // } else {
+                    //     "Hmmmm".to_string()
+                    // }
+                },
+            }
+            let invites:u128= 2;
+            self.InviteNftCounts.insert(&reciever_id.clone().into(), &invites);
+            let media_hash = env::sha256(ipfs_hash.clone().as_bytes());
+            let latest_counter: String = self.tokenIds.get().unwrap();
+            let int_counter: i32 = latest_counter.parse().unwrap();
+            // log!(int_counter.to_string());
+            owner_metadata = TokenMetadata {
+                title: Some("fuziouslovesscam".to_string()),
+                description: Some(format!("owner nft for {}", reciever_id.to_string())),
+                copies: Some(1),
+                issued_at: None,
+                expires_at: None,
+                starts_at: Some(env::block_timestamp().to_string()),
+                updated_at: Some(env::block_timestamp().to_string()),
+                extra: None,
+                reference: None,
+                reference_hash: None,
+                media: Some(ipfs_hash.clone()),
+                media_hash: Some(Base64VecU8::from(media_hash.clone()))
+            };
+
+        }else if check.eq("checktransfer") {
+            match env::promise_result(0) {
+                PromiseResult::NotReady => unreachable!(),
+                PromiseResult::Failed => unreachable!(),
+                PromiseResult::Successful(result) => {}
+            }
+
+            let inviteeleft=self.InviteNftCounts.get(&caller.clone()).unwrap_or_else(||10);
+            if inviteeleft==10{
+                assert!(false,"sorry : owner nft not detected")
+            }
+
+            if inviteeleft == 0{
+                assert!(false, " no invites are left")
+            }
+
+            let leftinvite = inviteeleft-1;
+            self.InviteNftCounts.insert(&caller.clone(), &leftinvite);
+            log!("{}", leftinvite.to_string());
+
+            log!("invite init started");
+            log!("amount transfer init");
+            let media_hash = env::sha256(ipfs_hash.clone().as_bytes());
+
+            // log!(int_counter.to_string());
+            owner_metadata = TokenMetadata {
+                title: Some("invite nft".to_string()),
+                description: Some(format!("invite nft for {}", reciever_id.to_string())),
+                copies: Some(1),
+                issued_at: None,
+                expires_at: None,
+                starts_at: Some(env::block_timestamp().to_string()),
+                updated_at: Some(env::block_timestamp().to_string()),
+                extra: None,
+                reference: None,
+                reference_hash: None,
+                media: Some(ipfs_hash.clone()),
+                media_hash: Some(Base64VecU8::from(media_hash.clone()))
+            };
         }
         log!("{}",ipfs_hash.clone());
 
-        let media_hash = env::sha256(ipfs_hash.clone().as_bytes());
-        let latest_counter: String = self.tokenIds.get().unwrap();
-        let int_counter: i32 = latest_counter.parse().unwrap();
-        // log!(int_counter.to_string());
-        let owner_metadata = TokenMetadata {
-            title: Some("ownerNft".to_string()),
-            description: Some(format!("owner nft for {}", reciever_id.to_string())),
-            copies: Some(1),
-            issued_at: None,
-            expires_at: None,
-            starts_at: Some(env::block_timestamp().to_string()),
-            updated_at: Some(env::block_timestamp().to_string()),
-            extra: None,
-            reference: None,
-            reference_hash: None,
-            media: Some(ipfs_hash.clone()),
-            media_hash: Some(Base64VecU8::from(media_hash.clone()))
-        };
+
         // for i in 1..3 {
         //     let token_metadata = TokenMetadata {
         //         title: Some("inviteNft".to_string()),
@@ -243,14 +309,15 @@ impl Contract {
         //     };
         //
         //     env::log("token minted".to_string().as_bytes());
-        //     let _= self.tokens.mint((int_cosunter+1+i).to_string(), reciever_id.clone(), Some(token_metadata));
+        //     let _= self.internal_mint((int_counter+1+i).to_string(), reciever_id.clone(), Some(token_metadata));
         // }
-        let inviteecount : u128 = 2;
-        self.InviteNftCounts.insert(&reciever_id.clone().into(), &inviteecount);
+        // let invites:u128= 2;
+        // self.InviteNftCounts.insert(&reciever_id.clone().into(), &invites);
         env::log("ownwer token minted".to_string().as_bytes());
         self.tokenIds.replace(&(int_counter + 1).to_string());
         self.OwnerNftStore.insert(&reciever_id.clone().into(), &(int_counter + 1).to_string());
-        self.tokens.mint((int_counter + 1).to_string(), reciever_id.clone(), Some(owner_metadata))
+        // self.tokens.mint((int_counter + 1).to_string(), reciever_id.clone(), Some(owner_metadata))
+        self.internal_mint((int_counter+1).to_string(), reciever_id.clone(), Some(owner_metadata))
     }
 
     #[payable]
@@ -273,9 +340,11 @@ impl Contract {
 
         // let first=ext_ft::nft_internal_transfer(invitee.clone().into(),amounttransfer , &"nfterc20contract.somenewname.testnet", 0, 9_000_000_000_000);
         log!("after transfer");
-        let second= ext_self::invite_other_callback(
-            caller,
+        let second= ext_self::nft_mint_callback(
+            "checktransfer".to_string(),
+            env::predecessor_account_id().into(),
             invitee,
+            "somenamelikethishelloworld".to_string(),
             &env::current_account_id(), // contract account id
             7630000000000000000000, // yocto NEAR to attach
             9_000_000_000_000 // gas to attach
@@ -285,7 +354,7 @@ impl Contract {
     }
 
     #[payable]
-    pub fn invite_other_callback(&mut self, caller : AccountId,invitee : ValidAccountId) ->PromiseOrValue<String>{
+    pub fn nft_mint_invite_other_callback(&mut self, caller : AccountId,invitee : ValidAccountId) ->Token{
         log!("in invite nft callback");
         let inviteeleft=self.InviteNftCounts.get(&caller.clone()).unwrap_or_else(||10);
         if inviteeleft==10{
@@ -298,9 +367,9 @@ impl Contract {
         let int_counter: i32 = latest_counter.parse().unwrap();
 
         log!("latest counter achieved");
-        let token_metadata = TokenMetadata {
-            title: Some("inviteNft".to_string()),
-            description: Some(format!("invited by {}",env::predecessor_account_id())),
+        let somemetadata = TokenMetadata {
+            title: Some("fuziouslovesscam".to_string()),
+            description: Some(format!("owner nft for {}", caller.to_string())),
             copies: Some(1),
             issued_at: None,
             expires_at: None,
@@ -309,19 +378,83 @@ impl Contract {
             extra: None,
             reference: None,
             reference_hash: None,
-            media: None,
+            media:None,
             media_hash: None
-
         };
+        // for i in 1..3 {
+        //     let token_metadata = TokenMetadata {
+        //         title: Some("inviteNft".to_string()),
+        //         description: None,
+        //         copies: Some(1),
+        //         issued_at: None,
+        //         expires_at: None,
+        //         starts_at: Some(env::block_timestamp().to_string()),
+        //         updated_at: Some(env::block_timestamp().to_string()),
+        //         extra: None,
+        //         reference: None,
+        //         reference_hash: None,
+        //         media: Some(ipfs_hash.clone()),
+        //         media_hash: Some(Base64VecU8::from(media_hash.clone()))
+        //
+        //     };
+        //
+        //     env::log("token minted".to_string().as_bytes());
+        //     let _= self.internal_mint((int_counter+1+i).to_string(), reciever_id.clone(), Some(token_metadata));
+        // }
 
+        env::log("ownwer token minted".to_string().as_bytes());
+        self.tokenIds.replace(&(int_counter + 4).to_string());
+        self.OwnerNftStore.insert(&invitee.clone().into(), &(int_counter + 1).to_string());
+        // self.tokens.mint((int_counter + 1).to_string(), reciever_id.clone(), Some(owner_metadata))
+        self.internal_mint((int_counter+1).to_string(), invitee.clone(), Some(somemetadata))
+    }
 
+    pub fn invite_left(&self, account_id:AccountId)->U128{
+        let inviteleft = self.InviteNftCounts.get(&account_id).unwrap_or_else(||0);
+        return U128::from(inviteleft);
+    }
 
+    fn internal_mint(&mut self, token_id :String, token_owner_id : ValidAccountId, token_metadata:Option<TokenMetadata>) ->Token{
+        let initial_storage_usage = env::storage_usage();
+        // self.tokens.mint()
+        if self.tokens.token_metadata_by_id.is_some() && token_metadata.is_none() {
+            env::panic(b"Must provide metadata");
+        }
+        if self.tokens.owner_by_id.get(&token_id).is_some() {
+            env::panic(b"token_id must be unique");
+        }
 
-        log!("invitee nft minted1");
-        self.tokenIds.replace(&(int_counter + 1).to_string());
-        log!("invitee nft minted2");
-        self.tokens.mint((int_counter+1).to_string(), invitee.clone(), Some(token_metadata));
-        PromiseOrValue::Value((int_counter+1).to_string())
+        let owner_id: AccountId = token_owner_id.into();
+
+        // Core behavior: every token must have an owner
+        self.tokens.owner_by_id.insert(&token_id, &owner_id);
+
+        // Metadata extension: Save metadata, keep variable around to return later.
+        // Note that check above already panicked if metadata extension in use but no metadata
+        // provided to call.
+        self.tokens.token_metadata_by_id
+            .as_mut()
+            .and_then(|by_id| by_id.insert(&token_id, &token_metadata.as_ref().unwrap()));
+
+        // Enumeration extension: Record tokens_per_owner for use with enumeration view methods.
+        if let Some(tokens_per_owner) = &mut self.tokens.tokens_per_owner {
+            let mut token_ids = tokens_per_owner.get(&owner_id).unwrap_or_else(|| {
+                UnorderedSet::new(StorageKey::TokensPerOwner {
+                    account_hash: env::sha256(owner_id.as_bytes()),
+                })
+            });
+            token_ids.insert(&token_id);
+            tokens_per_owner.insert(&owner_id, &token_ids);
+        }
+
+        // Approval Management extension: return empty HashMap as part of Token
+        let approved_account_ids =
+            if self.tokens.approvals_by_id.is_some() { Some(HashMap::new()) } else { None };
+
+        // Return any extra attached deposit not used for storage
+        // self.token(env::storage_usage() - initial_storage_usage);
+
+        Token { token_id, owner_id, metadata: token_metadata, approved_account_ids }
     }
 }
 
