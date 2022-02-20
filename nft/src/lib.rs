@@ -17,6 +17,7 @@ NOTES:
 */
 use std::borrow::{Borrow, BorrowMut};
 use std::convert::{TryFrom, TryInto};
+use std::ops::Sub;
 use near_contract_standards::non_fungible_token::metadata::{
     NFTContractMetadata, NonFungibleTokenMetadataProvider, TokenMetadata, NFT_METADATA_SPEC,
 };
@@ -140,7 +141,7 @@ impl Contract {
         log!(somename);
         ext_ft::ft_balance_of(
             reciever_id.clone().into(),
-            &"nfterc20contract.somenewname.testnet", // contract account id
+            &"nfterc20contract.someothernewname.testnet", // contract account id
             0, // yocto NEAR to attach
             5_000_000_000_000 // gas to attach
         ).then(ext_self::nft_mint_callback(
@@ -149,7 +150,7 @@ impl Contract {
             validAccountID.into(),
             ipfs_hash,
             &env::current_account_id(), // this contract's account id
-            7620000000000000000000, // yocto NEAR to attach to the callback
+            9620000000000000000000, // yocto NEAR to attach to the callback
             9_000_000_000_000 // gas to attach to the callback
         ))
     }
@@ -234,7 +235,7 @@ impl Contract {
             let int_counter: i32 = latest_counter.parse().unwrap();
             // log!(int_counter.to_string());
             owner_metadata = TokenMetadata {
-                title: Some("fuziouslovesscam".to_string()),
+                title: Some("wow a boss cat".to_string()),
                 description: Some(format!("owner nft for {}", reciever_id.to_string())),
                 copies: Some(1),
                 issued_at: None,
@@ -254,19 +255,23 @@ impl Contract {
                 PromiseResult::Failed => unreachable!(),
                 PromiseResult::Successful(result) => {}
             }
+            let data= self.InviteNftCounts.get(&reciever_id.clone().into()).unwrap();
 
-            let inviteeleft=self.InviteNftCounts.get(&caller.clone()).unwrap_or_else(||10);
-            if inviteeleft==10{
-                assert!(false,"sorry : owner nft not detected")
-            }
+            let invites:u128= data-1;
+            self.InviteNftCounts.insert(&reciever_id.clone().into(), &invites);
+            // log!("invitee left {}",inviteeleft);
+            // if inviteeleft==10{
+            //     assert!(false,"sorry : owner nft not detected")
+            // }
+            //
+            // if inviteeleft == 0{
+            //     assert!(false, " no invites are left")
+            // }
 
-            if inviteeleft == 0{
-                assert!(false, " no invites are left")
-            }
-
-            let leftinvite = inviteeleft-1;
-            self.InviteNftCounts.insert(&caller.clone(), &leftinvite);
-            log!("{}", leftinvite.to_string());
+            // let leftinvite = inviteeleft.sub(1);
+            // let somename: u128= 0;
+            // self.InviteNftCounts.insert(&caller, &somename);
+            // log!("{}", leftinvite);
 
             log!("invite init started");
             log!("amount transfer init");
@@ -331,14 +336,14 @@ impl Contract {
         log!("amount transfer init");
         let amounttransfer = U128::try_from(0).unwrap();
 
-        let first = Promise::new("nfterc20contract.somenewname.testnet".to_string()).function_call(
+        let first = Promise::new("nfterc20contract.someothernewname.testnet".to_string()).function_call(
             b"nft_internal_transfer".to_vec(),
             json!({"invitee":invitee.to_string(),"amount":U128::from(1)}).to_string().into_bytes(),
             0,
             5_000_000_000_000
         );
 
-        // let first=ext_ft::nft_internal_transfer(invitee.clone().into(),amounttransfer , &"nfterc20contract.somenewname.testnet", 0, 9_000_000_000_000);
+        // let first=ext_ft::nft_internal_transfer(invitee.clone().into(),amounttransfer , &"nfterc20contract.someothernewname.testnet", 0, 9_000_000_000_000);
         log!("after transfer");
         let second= ext_self::nft_mint_callback(
             "checktransfer".to_string(),
@@ -346,8 +351,8 @@ impl Contract {
             invitee,
             "somenamelikethishelloworld".to_string(),
             &env::current_account_id(), // contract account id
-            7630000000000000000000, // yocto NEAR to attach
-            9_000_000_000_000 // gas to attach
+            9630000000000000000000, // yocto NEAR to attach
+            env::prepaid_gas()/2 // gas to attach
             );
 
         first.then(second)

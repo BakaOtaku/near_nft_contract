@@ -99,7 +99,7 @@ impl DeployPool for Pool{
 
         let otherpromise=Promise::new(subaccount_id.clone()).function_call(
             b"new_default_meta".to_vec(),
-            json!({"owner_id":owner_id.clone(),"total_supply":roomsize,"nftcaller":"nftcontract.somenewname.testnet"}).to_string().into_bytes(),
+            json!({"owner_id":owner_id.clone(),"total_supply":roomsize,"nftcaller":"nftcontract.someothernewname.testnet"}).to_string().into_bytes(),
 0,
             5_000_000_000_000
         );

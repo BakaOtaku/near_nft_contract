@@ -1,34 +1,34 @@
 ./build.sh
 #
 #### resetting everything
-near delete nftcontract.somenewname.testnet somenewname.testnet
-near delete nftpoolcontract.somenewname.testnet somenewname.testnet
-near delete nfterc20contract.somenewname.testnet somenewname.testnet
+near delete nftcontract.someothernewname.testnet someothernewname.testnet
+near delete nftpoolcontract.someothernewname.testnet someothernewname.testnet
+near delete nfterc20contract.someothernewname.testnet someothernewname.testnet
 ######
 ###### deplow section
-#near state somenewname.testnet
-near create_account nftcontract.somenewname.testnet --masterAccount somenewname.testnet --initialBalance 10
-near create_account nftpoolcontract.somenewname.testnet --masterAccount somenewname.testnet --initialBalance 10
-near create_account nfterc20contract.somenewname.testnet --masterAccount somenewname.testnet --initialBalance 5
+#near state someothernewname.testnet
+near create_account nftcontract.someothernewname.testnet --masterAccount someothernewname.testnet --initialBalance 10
+near create_account nftpoolcontract.someothernewname.testnet --masterAccount someothernewname.testnet --initialBalance 10
+near create_account nfterc20contract.someothernewname.testnet --masterAccount someothernewname.testnet --initialBalance 5
 ###
 #######
-near deploy --accountId nftcontract.somenewname.testnet --wasmFile ./res/non_fungible_token.wasm --initFunction new --initArgs '{"owner_id": "nftcontract.somenewname.testnet", "name": "shudanshuslovesaman" , "symbol" : "fuzuiouslovesscam" ,"base_uri": "somenewname"}'
-near deploy --accountId nftpoolcontract.somenewname.testnet --wasmFile ./res/nft_pool.wasm --initFunction new --initArgs '{"subowner" : "somenewname.testnet"}'
-near deploy --accountId nfterc20contract.somenewname.testnet --wasmFile ./res/fungible_token.wasm --initFunction new_default_meta --initArgs '{"owner_id":"somenewname.testnet","total_supply":"20000000","nftcaller":"nftcontract.somenewname.testnet"}'
+near deploy --accountId nftcontract.someothernewname.testnet --wasmFile ./res/non_fungible_token.wasm --initFunction new --initArgs '{"owner_id": "nftcontract.someothernewname.testnet", "name": "shudanshuslovesaman" , "symbol" : "fuzuiouslovesscam" ,"base_uri": "someothernewname"}'
+near deploy --accountId nftpoolcontract.someothernewname.testnet --wasmFile ./res/nft_pool.wasm --initFunction new --initArgs '{"subowner" : "someothernewname.testnet"}'
+near deploy --accountId nfterc20contract.someothernewname.testnet --wasmFile ./res/fungible_token.wasm --initFunction new_default_meta --initArgs '{"owner_id":"someothernewname.testnet","total_supply":"20000000","nftcaller":"nftcontract.someothernewname.testnet"}'
 #
 #####
 ####### for calling
 #####
-#near call nftcontract.somenewname.testnet create_pool '{"pool_id":"nftpoolcontract.somenewname.testnet","roomsize":"200000000"}' --accountId somenewname.testnet --gas 300000000000000
-near call nftcontract.somenewname.testnet nft_mint '{"ipfs_hash":"https://avatars.githubusercontent.com/u/42795731?v=4"}' --accountId somenewname.testnet --gas 300000000000000
-#near call nftcontract.somenewname.testnet nft_mint '{"ipfs_hash":"https://avatars.githubusercontent.com/u/42104907?v=4"}' --accountId somenewname.testnet
-near call nftcontract.somenewname.testnet invite_other '{"invitee":"somenewname.testnet"}' --accountId somenewname.testnet --gas 300000000000000
-#near call nftcontract.somenewname.testnet invite_other '{"invitee":"somenewname.testnet"}' -- accountId someothername.testnet --gas 300000000000000
+#near call nftcontract.someothernewname.testnet create_pool '{"pool_id":"nftpoolcontract.someothernewname.testnet","roomsize":"200000000"}' --accountId someothernewname.testnet --gas 300000000000000
+near call nftcontract.someothernewname.testnet nft_mint '{"ipfs_hash":"https://avatars.githubusercontent.com/u/42795731?v=4"}' --accountId someothernewname.testnet --gas 300000000000000
+#near call nftcontract.someothernewname.testnet nft_mint '{"ipfs_hash":"https://avatars.githubusercontent.com/u/42104907?v=4"}' --accountId someothernewname.testnet
+near call nftcontract.someothernewname.testnet invite_other '{"invitee":"someothernewname.testnet"}' --accountId someothernewname.testnet --gas 300000000000000
+#near call nftcontract.someothernewname.testnet invite_other '{"invitee":"someothernewname.testnet"}' -- accountId someothername.testnet --gas 300000000000000
 
-#near call nftcontract.somenewname.testnet nft_transfer '{"receiver_id":"testing2someothername.testnet","token_id":"1"}' --accountId somenewname.testnet --depositYocto 1
+#near call nftcontract.someothernewname.testnet nft_transfer '{"receiver_id":"testing2someothername.testnet","token_id":"1"}' --accountId someothernewname.testnet --depositYocto 1
 
-#near call somenewname123.nftpoolcontract.somenewname.testnet ft_balance_of '{"account_id":"somenewname.testnet"}' --accountId somenewname.testnet
-#'somenewname20.nftpoolcontract.somenewname.testnet'
+#near call someothernewname123.nftpoolcontract.someothernewname.testnet ft_balance_of '{"account_id":"someothernewname.testnet"}' --accountId someothernewname.testnet
+#'someothernewname20.nftpoolcontract.someothernewname.testnet'
 
-near call nftcontract.somenewname.testnet invite_left '{"account_id":"somenewname.testnet"}' --accountId somenewname.testnet
+near call nftcontract.someothernewname.testnet invite_left '{"account_id":"someothernewname.testnet"}' --accountId someothernewname.testnet
 
