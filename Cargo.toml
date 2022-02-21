@@ -11,7 +11,7 @@ near-contract-standards = "3.1.1"
 
 # remember to include a line for each contract
 non-fungible-token = { path = "./nft" }
-fungible-token= {path= "erc20" }
+fungible-token= {path= "nep141contract" }
 nft-pool= {path= "nftpool" }
 
 [profile.release]
@@ -27,6 +27,6 @@ overflow-checks = true
 # remember to include a member for each contract
 members = [
   "nft",
-    "erc20",
+  "nep141contract",
   "nftpool"
 ]

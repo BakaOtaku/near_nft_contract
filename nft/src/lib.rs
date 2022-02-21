@@ -1,20 +1,3 @@
-/*!
-Non-Fungible Token implementation with JSON serialization.
-NOTES:
-  - The maximum balance value is limited by U128 (2**128 - 1).
-  - JSON calls should pass U128 as a base-10 string. E.g. "100".
-  - The contract optimizes the inner trie structure by hashing account IDs. It will prevent some
-    abuse of deep tries. Shouldn't be an issue, once NEAR clients implement full hashing of keys.
-  - The contract tracks the change in storage before and after the call. If the storage increases,
-    the contract requires the caller of the contract to attach enough deposit to the function call
-    to cover the storage cost.
-    This is done to prevent a denial of service attack on the contract by taking all available storage.
-    If the storage decreases, the contract will issue a refund for the cost of the released storage.
-    The unused tokens from the attached deposit are also refunded, so it's safe to
-    attach more deposit than required.
-  - To prevent the deployed contract from being modified or deleted, it should not have any access
-    keys on its account.
-*/
 use std::borrow::{Borrow, BorrowMut};
 use std::convert::{TryFrom, TryInto};
 use std::ops::Sub;
@@ -28,15 +11,14 @@ use near_sdk::collections::{LazyOption, LookupMap, UnorderedSet};
 use near_sdk::json_types::{Base64VecU8, ValidAccountId};
 use near_sdk::{env, ext_contract, near_bindgen, AccountId, Balance, Gas, BorshStorageKey, PanicOnDefault, Promise, PromiseOrValue, log, PromiseResult, CryptoHash};
 use near_sdk::env::{log, promise_result, sha256, state_read};
-// use near_sdk::PromiseOrValue::Promise;
-// use near_sdk::PromiseOrValue::Promise;
+
 use near_sdk::serde_json::{json, json_internal_vec};
 
 near_sdk::setup_alloc!();
 
 #[ext_contract(ext_pool)]
 pub trait DeployPool {
-    fn new_pool(&mut self, poolname:AccountId, owner_id:AccountId,roomsize :U128) -> PromiseOrValue<AccountId>;
+    fn new_pool(&mut self, poolname :AccountId, owner_id:AccountId,roomsize :U128) -> PromiseOrValue<AccountId>;
 }
 
 #[ext_contract(ext_ft)]
@@ -44,15 +26,10 @@ pub trait FungibleToken {
     fn ft_balance_of(&mut self, account_id: AccountId) -> U128;
     fn nft_internal_transfer(&mut self, invitee: AccountId, amount : U128);
 }
-//
-// #[ext_contract(ext_self)]
-// pub trait MyContract {
-//     fn my_callback(& mut self,reciever_id:ValidAccountId,ipfs_hash:String) -> Token;
-// }
+
 #[ext_contract(ext_self)]
 pub trait MyContract {
-    fn nft_mint_callback(&mut self, check:String, caller : AccountId,reciever_id :ValidAccountId,ipfs_hash: String) -> Token;
-    fn invite_other_callback(&mut self, caller : AccountId,invitee : ValidAccountId) -> Token;
+    fn nft_mint_callback(&mut self, check:String, caller : AccountId,reciever_id :ValidAccountId,ipfs_hash: String) -> String;
 }
 
 const NO_DEPOSIT: Balance = 0;
@@ -135,57 +112,48 @@ impl Contract {
         &mut self,
         ipfs_hash: String
     ) -> Promise {
+
         let reciever_id: String = env::predecessor_account_id();
         let validAccountID = ValidAccountId::try_from(reciever_id.clone()).unwrap();
         let somename = validAccountID.to_string();
-        log!(somename);
+
         ext_ft::ft_balance_of(
             reciever_id.clone().into(),
-            &"nfterc20contract.someothernewname.testnet", // contract account id
+            &"nfterc20contract.somenewname.testnet", // contract account id
             0, // yocto NEAR to attach
             5_000_000_000_000 // gas to attach
         ).then(ext_self::nft_mint_callback(
             "checkbalance".to_string(),
             env::predecessor_account_id().into(),
             validAccountID.into(),
-            ipfs_hash,
+            "".to_string(),
             &env::current_account_id(), // this contract's account id
             9620000000000000000000, // yocto NEAR to attach to the callback
-            9_000_000_000_000 // gas to attach to the callback
+            env::prepaid_gas()/2 // gas to attach to the callback
         ))
     }
 
     #[payable]
     pub fn create_pool(&mut self, pool_id: AccountId, roomsize: U128) -> PromiseOrValue<String> {
-        // assert_eq!(self.tokens.owner_id, env::predecessor_account_id());
-        // self.tokens.internal_transfer()
-        // // log!("{}",env::attached_deposit().to_string());
-        // let prepaid_gas = env::prepaid_gas();
         let account_id = env::predecessor_account_id();
         let tokenid = self.OwnerNftStore.get(&account_id.clone()).unwrap_or_else(|| "".to_string());
         log!(tokenid);
         if tokenid == "" {
             assert!(false, "token id not found")
         }
-        log!("token id for owner found");
+
         let validCurrentId = ValidAccountId::try_from(env::current_account_id()).unwrap();
-        // self.tokens.nft_approve(tokenid.clone(), validCurrentId.clone(), Some("".to_string()));
-        log!("before nft transfer");
-        // self.tokens.nft_transfer(validCurrentId, tokenid.clone(), None, None);
         self.tokens.internal_transfer(&env::predecessor_account_id(), &env::current_account_id(), &tokenid.clone(), None, None);
-        log!("after nft transfer");
-        //
         let mut poolname: Vec<&str> = account_id.split(".").collect();
         let counter = self.tokenIds.get().unwrap().to_owned();
         let mut finalname = poolname[0].to_string();
-        finalname.push_str("102202");
-        log!("creating pool");
+        finalname.push_str("creatorsroomandpools");
 
         ext_pool::new_pool(finalname.to_string(), env::predecessor_account_id(), roomsize, &pool_id, NO_DEPOSIT, env::prepaid_gas() / 2).into()
     }
 
     #[payable]
-    pub fn nft_mint_callback(&mut self, check:String, caller : AccountId,reciever_id: ValidAccountId, ipfs_hash: String) -> Token {
+    pub fn nft_mint_callback(&mut self, check:String, caller : AccountId, reciever_id: ValidAccountId, mut ipfs_hash: String) -> String {
         assert_eq!(
             env::promise_results_count(),
             1,
@@ -207,8 +175,7 @@ impl Contract {
         };
         let latest_counter: String = self.tokenIds.get().unwrap();
         let int_counter: i32 = latest_counter.parse().unwrap();
-        //
-        // // handle the result from the cross contract call this method is a callback for
+
         if check.eq("checkbalance") {
             log!(ipfs_hash);
             let stuff = reciever_id.to_string();
@@ -223,17 +190,16 @@ impl Contract {
                     if (balance.0 < 0) {
                         assert!(false, "balance less then required")
                     }
-                    // } else {
-                    //     "Hmmmm".to_string()
-                    // }
                 },
             }
             let invites:u128= 2;
             self.InviteNftCounts.insert(&reciever_id.clone().into(), &invites);
-            let media_hash = env::sha256(ipfs_hash.clone().as_bytes());
             let latest_counter: String = self.tokenIds.get().unwrap();
             let int_counter: i32 = latest_counter.parse().unwrap();
-            // log!(int_counter.to_string());
+
+            let newhash=format!("https://cattery-api.amanraj.dev/api/img/{}",(int_counter+1));
+            let media_hash = env::sha256(newhash.clone().as_bytes());
+
             owner_metadata = TokenMetadata {
                 title: Some("wow a boss cat".to_string()),
                 description: Some(format!("owner nft for {}", reciever_id.to_string())),
@@ -255,29 +221,18 @@ impl Contract {
                 PromiseResult::Failed => unreachable!(),
                 PromiseResult::Successful(result) => {}
             }
-            let data= self.InviteNftCounts.get(&reciever_id.clone().into()).unwrap();
+            let data= self.InviteNftCounts.get(&caller.clone().into()).unwrap();
 
             let invites:u128= data-1;
-            self.InviteNftCounts.insert(&reciever_id.clone().into(), &invites);
-            // log!("invitee left {}",inviteeleft);
-            // if inviteeleft==10{
-            //     assert!(false,"sorry : owner nft not detected")
-            // }
-            //
-            // if inviteeleft == 0{
-            //     assert!(false, " no invites are left")
-            // }
-
-            // let leftinvite = inviteeleft.sub(1);
-            // let somename: u128= 0;
-            // self.InviteNftCounts.insert(&caller, &somename);
-            // log!("{}", leftinvite);
+            self.InviteNftCounts.insert(&caller.clone().into(), &invites);
 
             log!("invite init started");
             log!("amount transfer init");
             let media_hash = env::sha256(ipfs_hash.clone().as_bytes());
 
             // log!(int_counter.to_string());
+            let newhash=format!("https://cattery-api.amanraj.dev/api/img/{}",(int_counter+1));
+            let media_hash = env::sha256(newhash.clone().as_bytes());
             owner_metadata = TokenMetadata {
                 title: Some("invite nft".to_string()),
                 description: Some(format!("invite nft for {}", reciever_id.to_string())),
@@ -289,40 +244,26 @@ impl Contract {
                 extra: None,
                 reference: None,
                 reference_hash: None,
-                media: Some(ipfs_hash.clone()),
+                media: Some(newhash.clone()),
                 media_hash: Some(Base64VecU8::from(media_hash.clone()))
             };
         }
         log!("{}",ipfs_hash.clone());
 
-
-        // for i in 1..3 {
-        //     let token_metadata = TokenMetadata {
-        //         title: Some("inviteNft".to_string()),
-        //         description: None,
-        //         copies: Some(1),
-        //         issued_at: None,
-        //         expires_at: None,
-        //         starts_at: Some(env::block_timestamp().to_string()),
-        //         updated_at: Some(env::block_timestamp().to_string()),
-        //         extra: None,
-        //         reference: None,
-        //         reference_hash: None,
-        //         media: Some(ipfs_hash.clone()),
-        //         media_hash: Some(Base64VecU8::from(media_hash.clone()))
-        //
-        //     };
-        //
-        //     env::log("token minted".to_string().as_bytes());
-        //     let _= self.internal_mint((int_counter+1+i).to_string(), reciever_id.clone(), Some(token_metadata));
-        // }
-        // let invites:u128= 2;
-        // self.InviteNftCounts.insert(&reciever_id.clone().into(), &invites);
         env::log("ownwer token minted".to_string().as_bytes());
         self.tokenIds.replace(&(int_counter + 1).to_string());
         self.OwnerNftStore.insert(&reciever_id.clone().into(), &(int_counter + 1).to_string());
-        // self.tokens.mint((int_counter + 1).to_string(), reciever_id.clone(), Some(owner_metadata))
-        self.internal_mint((int_counter+1).to_string(), reciever_id.clone(), Some(owner_metadata))
+
+        if check.eq("checktransfer"){
+            let invitecaller : ValidAccountId= ValidAccountId::try_from(caller.clone()).unwrap();
+            self.internal_mint((int_counter+1).to_string(),invitecaller , Some(owner_metadata));
+            self.tokens.internal_transfer(&caller, &reciever_id.clone().into(), &(int_counter+1).to_string(),None,None);
+            return (int_counter+1).to_string();
+
+        }
+
+        self.internal_mint((int_counter + 1).to_string(), reciever_id.clone(), Some(owner_metadata));
+        return (int_counter+1).to_string();
     }
 
     #[payable]
@@ -336,20 +277,19 @@ impl Contract {
         log!("amount transfer init");
         let amounttransfer = U128::try_from(0).unwrap();
 
-        let first = Promise::new("nfterc20contract.someothernewname.testnet".to_string()).function_call(
+        let first = Promise::new("nfterc20contract.somenewname.testnet".to_string()).function_call(
             b"nft_internal_transfer".to_vec(),
             json!({"invitee":invitee.to_string(),"amount":U128::from(1)}).to_string().into_bytes(),
             0,
             5_000_000_000_000
         );
 
-        // let first=ext_ft::nft_internal_transfer(invitee.clone().into(),amounttransfer , &"nfterc20contract.someothernewname.testnet", 0, 9_000_000_000_000);
         log!("after transfer");
         let second= ext_self::nft_mint_callback(
             "checktransfer".to_string(),
             env::predecessor_account_id().into(),
             invitee,
-            "somenamelikethishelloworld".to_string(),
+            "".to_string(),
             &env::current_account_id(), // contract account id
             9630000000000000000000, // yocto NEAR to attach
             env::prepaid_gas()/2 // gas to attach
@@ -358,61 +298,6 @@ impl Contract {
         first.then(second)
     }
 
-    #[payable]
-    pub fn nft_mint_invite_other_callback(&mut self, caller : AccountId,invitee : ValidAccountId) ->Token{
-        log!("in invite nft callback");
-        let inviteeleft=self.InviteNftCounts.get(&caller.clone()).unwrap_or_else(||10);
-        if inviteeleft==10{
-            assert!(false,"no invitee nft are left")
-        }
-
-        self.InviteNftCounts.insert(&caller,&(inviteeleft-1));
-
-        let latest_counter: String = self.tokenIds.get().unwrap();
-        let int_counter: i32 = latest_counter.parse().unwrap();
-
-        log!("latest counter achieved");
-        let somemetadata = TokenMetadata {
-            title: Some("fuziouslovesscam".to_string()),
-            description: Some(format!("owner nft for {}", caller.to_string())),
-            copies: Some(1),
-            issued_at: None,
-            expires_at: None,
-            starts_at: Some(env::block_timestamp().to_string()),
-            updated_at: Some(env::block_timestamp().to_string()),
-            extra: None,
-            reference: None,
-            reference_hash: None,
-            media:None,
-            media_hash: None
-        };
-        // for i in 1..3 {
-        //     let token_metadata = TokenMetadata {
-        //         title: Some("inviteNft".to_string()),
-        //         description: None,
-        //         copies: Some(1),
-        //         issued_at: None,
-        //         expires_at: None,
-        //         starts_at: Some(env::block_timestamp().to_string()),
-        //         updated_at: Some(env::block_timestamp().to_string()),
-        //         extra: None,
-        //         reference: None,
-        //         reference_hash: None,
-        //         media: Some(ipfs_hash.clone()),
-        //         media_hash: Some(Base64VecU8::from(media_hash.clone()))
-        //
-        //     };
-        //
-        //     env::log("token minted".to_string().as_bytes());
-        //     let _= self.internal_mint((int_counter+1+i).to_string(), reciever_id.clone(), Some(token_metadata));
-        // }
-
-        env::log("ownwer token minted".to_string().as_bytes());
-        self.tokenIds.replace(&(int_counter + 4).to_string());
-        self.OwnerNftStore.insert(&invitee.clone().into(), &(int_counter + 1).to_string());
-        // self.tokens.mint((int_counter + 1).to_string(), reciever_id.clone(), Some(owner_metadata))
-        self.internal_mint((int_counter+1).to_string(), invitee.clone(), Some(somemetadata))
-    }
 
     pub fn invite_left(&self, account_id:AccountId)->U128{
         let inviteleft = self.InviteNftCounts.get(&account_id).unwrap_or_else(||0);
@@ -441,6 +326,7 @@ impl Contract {
             .as_mut()
             .and_then(|by_id| by_id.insert(&token_id, &token_metadata.as_ref().unwrap()));
 
+        log!("inserted here");
         // Enumeration extension: Record tokens_per_owner for use with enumeration view methods.
         if let Some(tokens_per_owner) = &mut self.tokens.tokens_per_owner {
             let mut token_ids = tokens_per_owner.get(&owner_id).unwrap_or_else(|| {
@@ -456,8 +342,6 @@ impl Contract {
         let approved_account_ids =
             if self.tokens.approvals_by_id.is_some() { Some(HashMap::new()) } else { None };
 
-        // Return any extra attached deposit not used for storage
-        // self.token(env::storage_usage() - initial_storage_usage);
 
         Token { token_id, owner_id, metadata: token_metadata, approved_account_ids }
     }

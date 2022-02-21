@@ -44,14 +44,14 @@ impl Contract {
     // Initializes the contract with the given total supply owned by the given `owner_id` with
     // default metadata (for example purposes only).
     #[init]
-    pub fn new_default_meta(owner_id: ValidAccountId, total_supply: U128, nftcaller : AccountId)->Self {
+    pub fn new_default_meta(owner_id: ValidAccountId,name: String ,total_supply: U128, nftcaller : AccountId)->Self {
         Self::new(
             owner_id,
             total_supply,
             FungibleTokenMetadata {
-                spec: FT_METADATA_SPEC.to_string(),
-                name: "Example NEAR fungible token".to_string(),
-                symbol: "EXAMPLE".to_string(),
+                spec: "ft-1.0.0".to_string(),
+                name: name.clone(),
+                symbol: name.clone(),
                 icon: Some(DATA_IMAGE_SVG_NEAR_ICON.to_string()),
                 reference: None,
                 reference_hash: None,
@@ -98,22 +98,10 @@ this
     }
 
     pub fn nft_internal_transfer(&mut self, invitee: AccountId, amount : U128){
-        log!("TRANSFER ID REGISTERED");
-        if self.token.accounts.insert(&env::predecessor_account_id().clone(), &0).is_some() {
-        }
-        let data=self.ft_balance_of(ValidAccountId::try_from(invitee.clone()).unwrap());
-        log!("balance of {}",data.0.to_string());
-
-        log!("transfer beginning");
+        if self.token.accounts.insert(&env::predecessor_account_id().clone(), &0).is_some() {}
         assert_eq!(env::predecessor_account_id(),self.nftcallerall);
-        log!("transfer check complete");
         self.token.internal_transfer(&invitee, &env::predecessor_account_id(),amount.0, None)
     }
-
-    // fn create_ppol
-
-
-
 }
 
 near_contract_standards::impl_fungible_token_core!(Contract, token, on_tokens_burned);

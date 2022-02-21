@@ -20,14 +20,6 @@ trait DeployPool {
     fn new_pool(&mut self, poolname:AccountId, owner_id:AccountId,roomsize :U128) -> PromiseOrValue<AccountId>;
 }
 
-// #[ext_contract(ext_erc)]
-// pub trait Intializer{
-//     fn new_init()->PromiseOrValue<String>;
-// }
-
-
-
-
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Pool {
@@ -56,33 +48,14 @@ impl Pool{
         return true;
     }
 
-    // pub fn new_pool(&mut self,poolminter:AccountId, roomsize : U128)->Promise{
-    //     assert!(env::predecessor_account_id(), self.subowner);
-    //     let subaccount_id = format!("{}.{}", poolminter, env::current_account_id()).to_string();
-    //     let subaccout_copy= subaccount_id.clone();
-    //     let promise= Promise::new(subaccount_id)
-    //         .create_account()
-    //         .add_full_access_key(env::signer_account_pk())
-    //         .transfer(INITIAL_BALANCE)
-    //         .deploy_contract(CODE.to_vec()).function_call(
-    //         "new_default_meta".to_string().into_bytes(),
-    //         json!({"owner_id":poolminter,"total_supply":roomsize.0}).to_string().into_bytes(),
-    //         INITIAL_BALANCE,env::prepaid_gas()
-    //     );
-    //
-    //     self.token.insert(&poolminter, &subaccout_copy);
-    //
-    //     return promise
-    // }
+    pub fn get_pool_details(&self, for_account : AccountId)-> AccountId{
+        return self.token.get(&for_account).unwrap();
+    }
 }
 #[near_bindgen]
 impl DeployPool for Pool{
     fn new_pool(&mut self, poolname: AccountId, owner_id :AccountId, roomsize: U128) -> PromiseOrValue<AccountId> {
-        // assert_eq!(env::predecessor_account_id(), self.subowner.to_string());
-        // let subaccount_id = AccountId::new_unchecked(
-        //     format!("{}.{}", prefix, env::current_account_id())
-        // );
-        // let somename = ValidAccountId::try_from(poolminter.clone()).unwrap();
+
         log!("{}",env::prepaid_gas().to_string());
         let subaccount_id = format!("{}.{}", poolname, env::current_account_id()).to_string();
         let stuff =Promise::new(subaccount_id.clone())
@@ -92,14 +65,15 @@ impl DeployPool for Pool{
             .deploy_contract(CODE.to_vec());
 
         env::log("this was here".to_string().as_bytes());
-        log!("creating nft pool for erc20");
-        // let callback = Promise::new(
-        //     env::current_account_id(), // the recipient of this ActionReceipt (&self)
-        // )
+        log!("creating nft pool for nep141contract");
+
+        let ownervalid =ValidAccountId::try_from(owner_id.clone()).unwrap();
+        log!("{}",ownervalid.to_string());
+        log!("{}",json!({"owner_id":ownervalid,"name":"newname","total_supply":roomsize,"nftcaller":"nftcontract.somenewname.testnet"}).to_string());
 
         let otherpromise=Promise::new(subaccount_id.clone()).function_call(
             b"new_default_meta".to_vec(),
-            json!({"owner_id":owner_id.clone(),"total_supply":roomsize,"nftcaller":"nftcontract.someothernewname.testnet"}).to_string().into_bytes(),
+            json!({"owner_id":ownervalid,"name":"newname","total_supply":roomsize,"nftcaller":"nftcontract.somenewname.testnet"}).to_string().into_bytes(),
 0,
             5_000_000_000_000
         );
@@ -107,8 +81,7 @@ impl DeployPool for Pool{
 
         stuff.then(otherpromise);
 
-        //
-        // env::promise_return(otherpromise);
+        self.token.insert(&owner_id.clone(),&subaccount_id);
 
         return PromiseOrValue::Value(subaccount_id);
     }
